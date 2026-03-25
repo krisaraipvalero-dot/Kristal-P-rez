@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: leaderboard
+    // Fields:
+    //   - playerName: string (required, 1-20 chars)
+    //   - score: int (required, positive)
+    //   - timestamp: timestamp (required)
+    //   - userId: string (required, matches auth.uid)
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidScore(data) {
+      return data.playerName is string && 
+             data.playerName.size() >= 1 && 
+             data.playerName.size() <= 20 &&
+             data.score is int && 
+             data.score >= 0 &&
+             data.timestamp is timestamp &&
+             data.userId == request.auth.uid;
+    }
+
+    match /leaderboard/{scoreId} {
+      // Anyone can read the leaderboard
+      allow read: if true;
+      
+      // Only authenticated users can create their own scores
+      allow create: if isAuthenticated() && isValidScore(request.resource.data);
+      
+      // Scores are immutable once created for integrity
+      allow update, delete: if false;
+    }
+  }
+}
